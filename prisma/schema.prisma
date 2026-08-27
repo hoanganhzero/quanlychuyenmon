@@ -1,0 +1,619 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ ENUMS ============
+
+enum VaiTro {
+  ADMIN
+  BAN_GIAM_DOC
+  TO_TRUONG
+  GIAO_VIEN
+}
+
+enum TrangThaiVanBan {
+  NHAP
+  CHO_DUYET
+  CHO_BGD_DUYET
+  DA_DUYET
+  TU_CHOI
+}
+
+enum LoaiKeHoach {
+  GIAO_AN
+  KE_HOACH_BAI_DAY
+  KE_HOACH_CHU_DE
+}
+
+enum LoaiDiem {
+  MIENG
+  LAN_1
+  GIUA_KY
+  CUOI_KY
+  DANH_GIA
+}
+
+enum LoaiHoatDong {
+  SINH_HOAT_TO
+  BOI_DUONG
+  HOI_THAO
+  DAY_TRUC_TIEP
+}
+
+enum TrangThaiHocSinh {
+  DANG_HOC
+  BAO_LUU
+  CHUYEN_TRUONG
+  NGHI_HOC
+}
+
+// ============ FORM BÁO CÁO & TRIỂN KHAI VĂN BẢN ============
+
+enum KieuDuLieu {
+  TEXT
+  SO
+  NGAY
+  CHON
+  VAN_BAN_DAI
+}
+
+enum DoiTuongNhan {
+  TOAN_GV
+  GVBM
+  GVCN
+  TO_CHUYEN_MON
+}
+
+enum TrangThaiMau {
+  NHAP
+  DA_PHAT_HANH
+  DA_DONG
+}
+
+enum TheLoaiVanBan {
+  CONG_VAN
+  QUYET_DINH
+  KE_HOACH
+  THONG_BAO
+  KHAC
+}
+
+// ============ TÀI KHOẢN & PHÂN QUYỀN ============
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  tenDangNhap String?  @unique // tên tài khoản (đăng nhập thay thế cho email)
+  matKhau     String
+  hoTen       String
+  vaiTro      VaiTro   @default(GIAO_VIEN)
+  hoatDong    Boolean  @default(true)
+  taoLuc      DateTime @default(now())
+
+  giaoVien    GiaoVien?
+  giaoAnDuyet GiaoAn[]        @relation("NguoiDuyetGiaoAn")
+  baoCaoDuyet BaoCaoGVCN[]    @relation("NguoiDuyetBaoCao")
+  baoGiangDuyet BaoGiang[]    @relation("NguoiDuyetBaoGiang")
+  chuKys      ChuKy[]
+  tepTrinhKys TepTrinhKy[]
+  mauBaoCaos  MauBaoCao[]
+  vanBans     VanBan[]
+  mauChuKy    MauChuKy?
+  thongBaos   ThongBao[]
+}
+
+/** Thông báo trong hệ thống (chuông ở header) */
+model ThongBao {
+  id       String   @id @default(cuid())
+  userId   String
+  tieuDe   String
+  noiDung  String?
+  lienKet  String? // đường dẫn để bấm vào
+  daDoc    Boolean  @default(false)
+  taoLuc   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, daDoc])
+}
+
+// ============ CHỮ KÝ SỐ ============
+
+enum LoaiVanBan {
+  GIAO_AN
+  KE_HOACH_CA_NHAN
+  KE_HOACH_DU_DUNG_DAY_HOC
+  KE_HOACH_KIEM_TRA_DA_GIA
+  SO_CHU_CHU_NHiem
+  BAO_CAO
+  BAO_GIANG
+  BAO_CAO_GVCN
+}
+
+enum CapKy {
+  GV_SOAN
+  TO_TRUONG
+  BAN_GIAM_DOC
+}
+
+model ChuKy {
+  id               String   @id @default(cuid())
+  loaiVanBan       LoaiVanBan
+  vanBanId         String
+  capKy            CapKy
+  nguoiKyId        String
+  tenNguoiKy       String
+  chucVu           String
+  maXacThuc        String
+  viTriKy          String? // vị trí ký trên văn bản: "top-left" | "center" | "bottom-right"
+  templateId       String? // ID mẫu chữ ký tương ứng
+  kyLuc            DateTime @default(now())
+
+  nguoiKy User @relation(fields: [nguoiKyId], references: [id])
+
+  @@index([loaiVanBan, vanBanId])
+}
+
+/** Mẫu chữ ký tay mà mỗi người dùng tự upload (ảnh PNG/JPG) */
+model MauChuKy {
+  id          String   @id @default(cuid())
+  tenGoc      String // tên file gốc
+  tenLuu      String   @unique // tên file lưu trên đĩa
+  mimeType    String
+  kichThuoc   Int
+  taoLuc      DateTime @default(now())
+
+  nguoiDungId String @unique // mỗi người dùng 1 mẫu chữ ký
+  nguoiDung   User   @relation(fields: [nguoiDungId], references: [id], onDelete: Cascade)
+}
+
+// ============ NĂM HỌC & HỌC KỲ ============
+
+model NamHoc {
+  id           String   @id @default(cuid())
+  ten          String   @unique // "2026-2027"
+  ngayBatDau   DateTime
+  ngayKetThuc  DateTime
+  dangHoatDong Boolean  @default(false)
+
+  hocKys   HocKy[]
+  lops     LopHoc[]
+  phanCongs PhanCong[]
+  baoCaos  BaoCaoGVCN[]
+}
+
+model HocKy {
+  id       String  @id @default(cuid())
+  ten      String // "Học kỳ I"
+  thuTu    Int // 1 hoặc 2
+  namHocId String
+  dangChay Boolean @default(false)
+
+  namHoc NamHoc         @relation(fields: [namHocId], references: [id], onDelete: Cascade)
+  tkb    ThoiKhoaBieu[]
+  diems  Diem[]
+
+  @@unique([namHocId, thuTu])
+}
+
+// ============ TỔ CHUYÊN MÔN ============
+
+model ToChuyenMon {
+  id          String  @id @default(cuid())
+  ten         String  @unique
+  moTa        String?
+  toTruongId  String? @unique
+
+  toTruong  GiaoVien?            @relation("ToTruongTo", fields: [toTruongId], references: [id])
+  thanhViens GiaoVien[]          @relation("ThanhVienTo")
+  hoatDongs HoatDongChuyenMon[]
+  mauBaoCaos MauBaoCao[]
+  vanBans   VanBan[]
+}
+
+// ============ GIÁO VIÊN ============
+
+model GiaoVien {
+  id        String    @id @default(cuid())
+  maGV      String    @unique
+  hoTen     String
+  gioiTinh  Boolean // true = nam
+  ngaySinh  DateTime?
+  dienThoai String?
+  email     String?
+  chuyenMon String? // môn được đào tạo
+  trinhDo   String? // Đại học, Cao đẳng...
+  toChuyenMonId String?
+
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
+
+  toChuyenMon  ToChuyenMon?         @relation("ThanhVienTo", fields: [toChuyenMonId], references: [id])
+  chuTriCuaTo  ToChuyenMon?         @relation("ToTruongTo")
+  phanCongs    PhanCong[]
+  lopChuNhiem  LopHoc[]             @relation("GVCN")
+  giaoAns      GiaoAn[]
+  baoCaos      BaoCaoGVCN[]
+  gioDay       GioGiang[]
+  hoatDongChuTri HoatDongChuyenMon[] @relation("NguoiChuTri")
+  thamDus      ThamDu[]
+  phanHoiBaoCaos PhanHoiBaoCao[]
+  xacNhanVanBans XacNhanVanBan[]
+  baoGiangs      BaoGiang[]
+}
+
+// ============ LỚP HỌC & HỌC SINH ============
+
+model LopHoc {
+  id       String @id @default(cuid())
+  ten      String // "2A", "10B"
+  khoi     Int // 1..12
+  gvcnId   String?
+  namHocId String
+
+  gvcn    GiaoVien? @relation("GVCN", fields: [gvcnId], references: [id])
+  namHoc  NamHoc    @relation(fields: [namHocId], references: [id], onDelete: Cascade)
+  hocSinhs HocSinh[]
+  tkb     ThoiKhoaBieu[]
+  phanCongs PhanCong[]
+  baoCaos BaoCaoGVCN[]
+  giaoAns GiaoAn[]
+  baoGiangs BaoGiang[]
+  gioDay  GioGiang[]
+
+  @@unique([ten, namHocId])
+}
+
+model HocSinh {
+  id        String           @id @default(cuid())
+  maHS      String           @unique
+  hoTen     String
+  ngaySinh  DateTime
+  gioiTinh  Boolean // true = nam
+  diaChi    String?
+  tenCha    String?
+  tenMe     String?
+  sdtPhuHuynh String?
+  trangThai TrangThaiHocSinh @default(DANG_HOC)
+  ghiChu    String?
+
+  lopHocId String?
+  lopHoc   LopHoc? @relation(fields: [lopHocId], references: [id])
+
+  diems Diem[]
+}
+
+model MonHoc {
+  id     String  @id @default(cuid())
+  maMon  String  @unique // "TOAN"
+  tenMon String
+  moTa   String?
+
+  phanCongs PhanCong[]
+  diems     Diem[]
+  giaoAns   GiaoAn[]
+  baoGiangs BaoGiang[]
+}
+
+// ============ PHÂN CÔNG & THỜI KHÓA BIỂU ============
+
+model PhanCong {
+  id          String  @id @default(cuid())
+  giaoVienId  String
+  monHocId    String
+  lopHocId    String
+  namHocId    String
+  soTietTuan  Int     @default(0)
+  ghiChu      String?
+
+  giaoVien GiaoVien @relation(fields: [giaoVienId], references: [id], onDelete: Cascade)
+  monHoc   MonHoc   @relation(fields: [monHocId], references: [id])
+  lopHoc   LopHoc   @relation(fields: [lopHocId], references: [id], onDelete: Cascade)
+  namHoc   NamHoc   @relation(fields: [namHocId], references: [id])
+
+  tkb     ThoiKhoaBieu[]
+  giaoAns GiaoAn[]
+  gioDay  GioGiang[]
+
+  @@unique([giaoVienId, monHocId, lopHocId, namHocId])
+}
+
+model ThoiKhoaBieu {
+  id         String @id @default(cuid())
+  lopHocId   String
+  thu        Int // 2..8 (thứ 2 -> chủ nhật)
+  tiet       Int // 1..10
+  phanCongId String
+  hocKyId    String
+
+  lopHoc    LopHoc   @relation(fields: [lopHocId], references: [id], onDelete: Cascade)
+  phanCong  PhanCong @relation(fields: [phanCongId], references: [id], onDelete: Cascade)
+  hocKy     HocKy    @relation(fields: [hocKyId], references: [id], onDelete: Cascade)
+
+  @@unique([lopHocId, thu, tiet, hocKyId])
+}
+
+// ============ GIÁO ÁN & KẾ HOẠCH DẠY HỌC ============
+
+model GiaoAn {
+  id         String      @id @default(cuid())
+  loai       LoaiKeHoach @default(GIAO_AN)
+  tieuDe     String
+  noiDung    String      @db.Text
+  tepDinhKem String?
+
+  giaoVienId String
+  monHocId   String
+  phanCongId String?
+  lopHocId   String?
+
+  giaoVien  GiaoVien @relation(fields: [giaoVienId], references: [id])
+  monHoc    MonHoc   @relation(fields: [monHocId], references: [id])
+  phanCong  PhanCong? @relation(fields: [phanCongId], references: [id])
+  lopHoc    LopHoc?  @relation(fields: [lopHocId], references: [id])
+
+  trangThai    TrangThaiVanBan @default(NHAP)
+  nguoiDuyetId String?
+  nhanXet      String?
+  ngayGui      DateTime?
+  taoLuc       DateTime        @default(now())
+  capNhatLuc   DateTime        @updatedAt
+
+  nguoiDuyet User?          @relation("NguoiDuyetGiaoAn", fields: [nguoiDuyetId], references: [id])
+  tepTrinhKys TepTrinhKy[]
+}
+
+// ============ ĐIỂM SỐ ============
+
+model Diem {
+  id        String  @id @default(cuid())
+  hocSinhId String
+  monHocId  String
+  hocKyId   String
+  loaiDiem  LoaiDiem
+  lanThu    Int     @default(1)
+  giaTri    Float? // điểm số 0-10
+  ketQua    String? // "Đạt" / "Chưa đạt" (đánh giá tiểu học)
+  nhanXet   String?
+
+  hocSinh HocSinh @relation(fields: [hocSinhId], references: [id], onDelete: Cascade)
+  monHoc  MonHoc  @relation(fields: [monHocId], references: [id])
+  hocKy   HocKy   @relation(fields: [hocKyId], references: [id], onDelete: Cascade)
+
+  @@unique([hocSinhId, monHocId, hocKyId, loaiDiem, lanThu])
+}
+
+// ============ HOẠT ĐỘNG CHUYÊN MÔN (sinh hoạt tổ, bồi dưỡng) ============
+
+model HoatDongChuyenMon {
+  id            String       @id @default(cuid())
+  loai          LoaiHoatDong @default(SINH_HOAT_TO)
+  tieuDe        String
+  ngay          DateTime
+  diaDiem       String?
+  noiDung       String?      @db.Text
+  bienBan       String?      @db.Text
+  toChuyenMonId String?
+  chuTriId      String?
+
+  toChuyenMon ToChuyenMon? @relation(fields: [toChuyenMonId], references: [id])
+  chuTri      GiaoVien?    @relation("NguoiChuTri", fields: [chuTriId], references: [id])
+  thamGia     ThamDu[]
+}
+
+model ThamDu {
+  hoatDongId String
+  giaoVienId String
+  coMat      Boolean @default(false)
+  ghiChu     String?
+
+  hoatDong HoatDongChuyenMon @relation(fields: [hoatDongId], references: [id], onDelete: Cascade)
+  giaoVien GiaoVien          @relation(fields: [giaoVienId], references: [id], onDelete: Cascade)
+
+  @@id([hoatDongId, giaoVienId])
+}
+
+// ============ BÁO CÁO GVCN HÀNG THÁNG ============
+
+model BaoCaoGVCN {
+  id       String @id @default(cuid())
+  thang    Int // 1..12
+  siSo     Int?
+  nghiCoPhep  Int?
+  nghiKoPhep Int?
+  noiDung  String? @db.Text // tình hình lớp trong tháng
+  deXuat   String?
+
+  gvcnId   String
+  lopHocId String
+  namHocId String
+
+  gvcn    GiaoVien @relation(fields: [gvcnId], references: [id])
+  lopHoc  LopHoc   @relation(fields: [lopHocId], references: [id], onDelete: Cascade)
+  namHoc  NamHoc   @relation(fields: [namHocId], references: [id])
+
+  trangThai    TrangThaiVanBan @default(NHAP)
+  nguoiDuyetId String?
+  nhanXet      String?
+  ngayGui      DateTime?
+  taoLuc       DateTime        @default(now())
+  capNhatLuc   DateTime        @updatedAt
+
+  nguoiDuyet User? @relation("NguoiDuyetBaoCao", fields: [nguoiDuyetId], references: [id])
+
+  tepTrinhKys TepTrinhKy[]
+
+  @@unique([lopHocId, thang, namHocId])
+}
+
+// ============ FILE TRÌNH KÝ (Word/PDF) ============
+
+model TepTrinhKy {
+  id        String   @id @default(cuid())
+  tenGoc    String // tên file gốc của giáo viên
+  tenLuu    String   @unique // tên file lưu trên đĩa
+  mimeType  String
+  kichThuoc Int // bytes
+  taiLuc    DateTime @default(now())
+
+  giaoAnId String?
+  giaoAn   GiaoAn?     @relation(fields: [giaoAnId], references: [id], onDelete: Cascade)
+  baoCaoId String?
+  baoCao   BaoCaoGVCN? @relation(fields: [baoCaoId], references: [id], onDelete: Cascade)
+
+  nguoiTaiId String
+  nguoiTai   User     @relation(fields: [nguoiTaiId], references: [id])
+
+  vanBanId String?
+  vanBan   VanBan?  @relation(fields: [vanBanId], references: [id], onDelete: Cascade)
+}
+
+// ============ MẪU FORM BÁO CÁO (tạo từ Excel) ============
+
+model MauBaoCao {
+  id        String   @id @default(cuid())
+  tieuDe    String
+  moTa      String?
+  hanChot   DateTime?
+  doiTuong  DoiTuongNhan @default(TOAN_GV)
+  toChuyenMonId String?
+  trangThai TrangThaiMau @default(NHAP)
+  phatHanhLuc DateTime?
+  taoLuc    DateTime @default(now())
+
+  nguoiTaoId String
+  nguoiTao   User         @relation(fields: [nguoiTaoId], references: [id])
+  toChuyenMon ToChuyenMon? @relation(fields: [toChuyenMonId], references: [id])
+
+  fields  MauBaoCaoField[]
+  phanHois PhanHoiBaoCao[]
+}
+
+model MauBaoCaoField {
+  id          String     @id @default(cuid())
+  mauBaoCaoId String
+  thuTu       Int
+  tenTruong   String
+  kieuDuLieu  KieuDuLieu @default(TEXT)
+  luaChon     String? // các lựa chọn cách nhau bằng dấu |
+  batBuoc     Boolean    @default(false)
+
+  mauBaoCao MauBaoCao @relation(fields: [mauBaoCaoId], references: [id], onDelete: Cascade)
+  giaTris   GiaTriPhanHoi[]
+}
+
+model PhanHoiBaoCao {
+  id           String   @id @default(cuid())
+  mauBaoCaoId  String
+  giaoVienId   String
+  guiLuc       DateTime @default(now())
+
+  mauBaoCao MauBaoCao @relation(fields: [mauBaoCaoId], references: [id], onDelete: Cascade)
+  giaoVien  GiaoVien  @relation(fields: [giaoVienId], references: [id])
+  giaTris   GiaTriPhanHoi[]
+
+  @@unique([mauBaoCaoId, giaoVienId])
+}
+
+model GiaTriPhanHoi {
+  id        String  @id @default(cuid())
+  phanHoiId String
+  fieldId   String
+  giaTri    String?
+
+  phanHoi PhanHoiBaoCao   @relation(fields: [phanHoiId], references: [id], onDelete: Cascade)
+  field   MauBaoCaoField  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+}
+
+// ============ TRIỂN KHAI VĂN BẢN ============
+
+model VanBan {
+  id            String       @id @default(cuid())
+  soHieu        String?
+  trichYeu      String
+  loaiVanBan    TheLoaiVanBan @default(KHAC)
+  noiDung       String?      @db.Text
+  ngayBanHanh   DateTime?
+  nguoiTrinhBay String?
+  hanChot       DateTime?
+  doiTuong      DoiTuongNhan @default(TOAN_GV)
+  toChuyenMonId String?
+  trangThai     TrangThaiMau @default(NHAP)
+  phatHanhLuc   DateTime?
+  taoLuc        DateTime     @default(now())
+
+  nguoiTaoId String
+  nguoiTao   User         @relation(fields: [nguoiTaoId], references: [id])
+  toChuyenMon ToChuyenMon? @relation(fields: [toChuyenMonId], references: [id])
+
+  tepTrinhKys TepTrinhKy[]
+  xacNhans    XacNhanVanBan[]
+}
+
+model XacNhanVanBan {
+  id         String    @id @default(cuid())
+  vanBanId   String
+  giaoVienId String
+  daDoc      Boolean   @default(true)
+  docLuc     DateTime  @default(now())
+  ghiChu     String?
+
+  vanBan   VanBan   @relation(fields: [vanBanId], references: [id], onDelete: Cascade)
+  giaoVien GiaoVien @relation(fields: [giaoVienId], references: [id])
+
+  @@unique([vanBanId, giaoVienId])
+}
+
+// ============ GIỜ GIẤC GIẢNG DẠY (nhật ký dạy) ============
+
+model GioGiang {
+  id         String   @id @default(cuid())
+  ngay       DateTime
+  tiet       Int
+  soTiet     Int      @default(1)
+  daDay      Boolean  @default(true)
+  lyDoVang   String?
+  ghiChu     String?
+
+  giaoVienId String
+  phanCongId String?
+  lopHocId   String?
+
+  giaoVien GiaoVien  @relation(fields: [giaoVienId], references: [id], onDelete: Cascade)
+  phanCong PhanCong? @relation(fields: [phanCongId], references: [id])
+  lopHoc   LopHoc?   @relation(fields: [lopHocId], references: [id])
+}
+
+// ============ SỔ BÁO GIẢNG ============
+
+model BaoGiang {
+  id          String   @id @default(cuid())
+  ngay        DateTime
+  tietBatDau  Int      @default(1)
+  soTiet      Int      @default(1)
+  tenBaiDay   String
+  ghiChu      String?
+
+  giaoVienId String
+  monHocId   String
+  lopHocId   String?
+
+  trangThai    TrangThaiVanBan @default(NHAP)
+  nguoiDuyetId String?
+  nhanXet      String?
+  ngayGui      DateTime?
+  taoLuc       DateTime        @default(now())
+  capNhatLuc   DateTime        @updatedAt
+
+  giaoVien GiaoVien @relation(fields: [giaoVienId], references: [id])
+  monHoc   MonHoc   @relation(fields: [monHocId], references: [id])
+  lopHoc   LopHoc?  @relation(fields: [lopHocId], references: [id])
+  nguoiDuyet User?  @relation("NguoiDuyetBaoGiang", fields: [nguoiDuyetId], references: [id])
+
+  @@index([giaoVienId, ngay])
+}
