@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   title: "Quản lý chuyên môn",
   description: "Quản lý đội ngũ, lớp học, hồ sơ chuyên môn và quy trình phê duyệt",
+  icons: { apple: "/icons/icon-192.png" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
